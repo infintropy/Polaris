@@ -132,6 +132,7 @@ print "Elapsed Time: %s" % (time.time() - start)
 
 class SessionManager():
     '''
+    This will let me know easier.
     It is assumed that entities are limited to the preconfigured tables.
 
     We must
