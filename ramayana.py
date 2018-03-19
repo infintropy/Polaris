@@ -1,8 +1,10 @@
 '''
 
 '''
-import pyseq
-import os
+import sys
+sys.path.append(os.path.split(__file__)[0])
+import vayu
+
 
 locations = {"LA":
                 {"short_name": "LA", 'id':0, 'name':"Los Angeles", 'timezone':"+5:00"},
@@ -69,14 +71,15 @@ class Person():
 
 class Facility(object):
 
-    def __init__(self):
+    def __init__(self, ac):
+        self.ac = ac
         self.type = 'Facility'
         self.locations = locations
         self.location = None
         self.filebase = "/jobs"
         self.projects = {}
 
-        self.getProjects()
+        #elf.getProjects()
 
     def setLocation(self, location):
         self.location = location
@@ -176,24 +179,20 @@ class Sequence(object):
             self.latestComps[shotname] = shot.getLatestComps()
         return self.latestComps
 
-
-
-
-
-
-
-
-
 class Project(object):
     def __init__(self, facility, name):
         self.type = 'Project'
         self.facility = facility
+        self.ac = self.facility.ac
         self.name = name
         self.id = None
         self.full_name = None
         self.filebase = "%s/%s" %(self.facility.filebase, self.name)
         self.sequences = {}
         self.episodes = {}
+
+        self.map_id()
+
 
         #diagnostic
         self.isEpisodic = False
@@ -206,12 +205,39 @@ class Project(object):
         if ls is False: return self.sequences
         else: return sorted(self.sequences.keys())
 
+    def get_shots(self):
+        shots = self.ac.table[self.name]['Shot']
+        #
+        #return shots
+        for i in shots:
+            print i['fields']['name']
+
+    def get_tasks(self):
+        tasks = self.ac.table[self.name]['Task']
+        return tasks
+
+    def get_notes(self):
+        notes = self.ac.table[self.name]['Note']
+        return notes
+
+    def get(self, entity, fields=None, formula=None):
+        pass
+
     def getEpisodes(self, ls=False):
         #use descriptor logic to deduce episodes, then builds an episode dict that contain sequences
         pass
 
+    def get_all_projects(self):
+        return self.facility.ac.session_mapping.keys()
 
+    def map_id(self):
+        self.id = self.facility.ac.session_mapping[self.name]
+        print self.id
 
+    def status(self):
+        rec = self.facility.ac.config['BASE'].get_all(fields=['status'], formula="{project_code}='%s'" %self.name)
+        if len(rec)>0:
+            return rec[0]['fields']['status']
 
 
 
@@ -229,17 +255,26 @@ class SGCacheWrap():
 
 
 
-class Multivac(object):
+class Multivac(vayu.SessionManager):
     '''
     context driver for each class instance. Can limit and communicate between the classes.
     Inherits the facility as main object class
     '''
     def __init__(self):
+        vayu.SessionManager.__init__(self)
+        self.build_all_sessions()
+        self.facility = Facility(self)
+        self.project = {}
+
+        self.connect_projects()
 
 
-        self.facility = Facility()
 
     def ss(self, proj, seq, shot, verify=False ):
         self.project = Project(self.facility, proj )
         self.sequence = Sequence(self.project, seq)
         self.shot = Shot(self.sequence, shot)
+
+    def connect_projects(self):
+        for name in self.session_mapping.keys():
+            self.project[name] = Project(self.facility, name)
