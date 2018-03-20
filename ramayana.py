@@ -159,25 +159,25 @@ class Shot(object):
 
 
 class Sequence(object):
-    def __init__(self, project, name):
+    def __init__(self, project, name, id=None):
         self.type = 'Sequence'
+
         self.project = project
+        self.ac = self.project.ac
         self.shots = {}
         self.name = name
+        self.id = id
         self.filebase = "%s/%s" %(self.project.filebase, self.name)
 
         self.latestComps = {}
 
-    def getShots(self, ls=False):
-        self.shots = dict((s, Shot(self, s))  for s in sorted(tao.listdir(self.filebase)))
-        if ls is False: return self.shots
-        else: return self.shots.keys()
 
-    def getLatestComps(self, mod=None):
-        self.getShots()
-        for shotname,shot in self.shots.iteritems():
-            self.latestComps[shotname] = shot.getLatestComps()
-        return self.latestComps
+
+    def add_shot(self, name):
+        self.project.add_shot(name, seq=self.name )
+
+    def get_shots(self):
+        return [f for f in self.ac.table[self.project.name]['Shot'] if f.get('fields') and f['fields']['sequence'] == [str(self.id)]]
 
 class Project(object):
     def __init__(self, facility, name):
@@ -188,10 +188,13 @@ class Project(object):
         self.id = None
         self.full_name = None
         self.filebase = "%s/%s" %(self.facility.filebase, self.name)
-        self.sequences = {}
+        self.id_seq = {}
+        self.seq_id = {}
+
         self.episodes = {}
 
         self.map_id()
+        #self.get_sequences()
 
 
         #diagnostic
@@ -200,10 +203,8 @@ class Project(object):
     def setName(self, name):
         self.name = name
 
-    def getSequences(self, ls=False):
-        self.sequences = dict((s, Sequence(self, s))  for s in sorted(tao.listdir(self.filebase)))
-        if ls is False: return self.sequences
-        else: return sorted(self.sequences.keys())
+
+
 
     def get_shots(self):
         shots = self.ac.table[self.name]['Shot']
@@ -215,6 +216,38 @@ class Project(object):
     def get_tasks(self):
         tasks = self.ac.table[self.name]['Task']
         return tasks
+
+    def add_shot(self, name, seq=None):
+        '''
+
+
+        :param name: str to name the shot
+        :param seq: option
+        :return:
+        '''
+        payload = {'name': name}
+        if seq:
+            if seq in self.seq_id.keys():
+                seqid = self.seq_id[seq]
+                print seqid
+            else:
+                sequence = self.add_sequence( seq )
+                seqid = sequence.id
+            payload['sequence'] = [seqid]
+        return self.ac.base[self.name]['Shot'].insert( payload )
+
+    def add_sequence(self, name):
+        ret =  self.ac.base[self.name]['Sequence'].insert({'name': name})
+        s = Sequence(self, name)
+        s.id = ret['id']
+        return s
+
+    def get_sequences(self):
+        self.seq_id = dict(( i['fields']['name'], i['id'] ) for i in self.ac.table[self.name]['Sequence'])
+        self.id_seq = dict((v, k) for k,v in self.seq_id.iteritems())
+        self._seq_dict = dict((k, Sequence(self, k, id=v ) ) for k,v in self.seq_id.iteritems() )
+        return self._seq_dict
+
 
     def get_notes(self):
         notes = self.ac.table[self.name]['Note']
