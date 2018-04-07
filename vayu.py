@@ -159,21 +159,21 @@ class SessionManager():
         people_table = [i['fields'] for i in self.team['People'].get_all()]
         pt = []
         for i in people_table:
-            pic = i['picture'][0]['thumbnails']['large']['url']
-            person = [dict((k, v  ) for k,v in f.iteritems() if k is not "picture") for f in people_table ]
-            person['picture'] = [pic]
+            #pic = i['picture'][0]['thumbnails']['large']['url']
+            person = dict((k, v  ) for k,v in i.iteritems() if k in ['first_name', 'last_name', 'email', 'latest_activity'])
+
             pt.append(person)
 
             # people_table[i]['picture'] =
         for b in self.base.keys():
             if "People" in self.base[b].keys():
                 print "refreshing all entries from base {} #People".format(b)
-                self.base[b]['People'].batch_delete([i['id'] for i in self.table[b]['People']])
+                self.base[b]['People'].batch_delete([i['id'] for i in self.base[b]['People'].get_all()])
 
 
                 #self.base[b]['People']
-                return pt
-                #self.base[b]["People"].batch_insert(people_table)
+                #return pt
+                return self.base[b]["People"].batch_insert(pt)
 
 
     def default_project_entities(self):
