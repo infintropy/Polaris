@@ -3,6 +3,7 @@ import json
 import base64
 import os
 import six
+import copy
 from Queue import Queue
 from threading import Thread
 
@@ -73,11 +74,14 @@ class SessionManager():
         self.base = {}
         self._rec = {}
         self.table = {}
+        self.team = {}
         self.default_entities = None
         # builds the session obj
         self.config = {}
         for s in ['BASE', 'ENTITY']:
             self.config[s] = airtable.Airtable(CONFIG_BASE_KEY, s)
+
+
         self.get_sessions()
 
     def get_sessions(self, all=None):
@@ -87,6 +91,7 @@ class SessionManager():
         self.session_info = self.config['BASE'].get_all(fields=['project_code', 'session_id', 'session_type', 'extra_entities'],
                                                         formula="{status}='active'")
         self.session_mapping = dict((i['fields']['project_code'], i['fields']['session_id']) for i in self.session_info if i['fields'].get('session_type') and i['fields']['session_type']=="Project")
+        self.team_mapping= [i['fields']['session_id'] for i in self.session_info if i['fields'].get('session_type') and i['fields']['session_type'] == "Team"][0]
         return self.session_mapping
 
     def get_base(self, base):
@@ -139,7 +144,36 @@ class SessionManager():
                                 print("INFO:: MAPPED BASE:: {} >> TABLE:: {} into main session object.".format(k, e) )
                             except:
                                 print("ERROR:: Couldnt establish base {}:{}".format(k, e) )
+                    try:
+                        self.base[k]["People"] = airtable.Airtable(v, "#People")
+                    except:
+                        pass
+
                     self.get_base(k)
+        if self.team_mapping:
+            self.team['People'] = airtable.Airtable(self.team_mapping, "People")
+
+
+    def refresh_people_table(self):
+        # this is the recipe: ac.base['avt2']['People'].batch_delete([i['id'] for i in ac.table['avt2']['People']])
+        people_table = [i['fields'] for i in self.team['People'].get_all()]
+        pt = []
+        for i in people_table:
+            pic = i['picture'][0]['thumbnails']['large']['url']
+            person = [dict((k, v  ) for k,v in f.iteritems() if k is not "picture") for f in people_table ]
+            person['picture'] = [pic]
+            pt.append(person)
+
+            # people_table[i]['picture'] =
+        for b in self.base.keys():
+            if "People" in self.base[b].keys():
+                print "refreshing all entries from base {} #People".format(b)
+                self.base[b]['People'].batch_delete([i['id'] for i in self.table[b]['People']])
+
+
+                #self.base[b]['People']
+                return pt
+                #self.base[b]["People"].batch_insert(people_table)
 
 
     def default_project_entities(self):

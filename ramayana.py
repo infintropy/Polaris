@@ -1,6 +1,7 @@
 '''
 
 '''
+import os
 import sys
 sys.path.append(os.path.split(__file__)[0])
 import vayu
@@ -40,9 +41,10 @@ class Role():
     pass
 
 class Person():
-    def __init__(self):
+    def __init__(self, id):
         self.role = None
         self.full_name = None
+        self.id = id
         self.login = None
         self.permissions = None
         self.activeProject = None #placeholder for project assignment per person
@@ -131,31 +133,43 @@ class NukeScript(object):
 
 
 class Shot(object):
-    def __init__(self, sequence, name):
+    def __init__(self, parent, name,  id=None, ):
         self.type = 'Shot'
-        self.sequence = sequence
+        if parent.type:
+            if parent.type=='Sequence':
+                self.sequence = parent #This needs to be fleshed out.
+                self.project = self.sequence.project
+                self.ac = self.sequence.ac
+            elif parent.type=='Project:':
+                self.project = parent
+                self.ac = self.project.ac
         self.name = name
-        self.filebase = "%s/%s" %(self.sequence.filebase, self.name)
-        self.filebaseCompRender = "%s/img/renders" %self.filebase
-        self.filebaseCGRender = "%s/img/comp" %self.filebase
-        self.filebase2DScripts = "%s/2D/nk/" %self.filebase
-
-
-        self.nukeScripts = {}
-        self.cgScenes = {}
-        self.nukeRenders = {}
-        self.cgRenders = {}
+        self.id = id
+        self.base = self.ac.base[self.project.name]['Shot']
 
 
 
+    def add_task(self, name, descr=None):
+        return self.project.add_task(name, shot_id=self.id, descr=descr)
+
+    def set_status(self, status):
+        self.base.update(self.id, {"status": status})
+
+    def set_description(self, descr):
+        self.base.update(self.id, {"description": descr})
+
+    def set_frame_range(self, fin, fout):
+        return self.base.update(self.id, {"frame_in": fin, "frame_out": fout})
+
+    def add_note(self, note, task=None):
+        """
+        If task is given the note will be at the task level, otherwise its visible at the shot level.
+        :param note:
+        :param task:
+        :return:
+        """
 
 
-    def get2DScripts(self):
-        self.nukeScripts = dict((d, sorted([f for f in tao.listdir( "%s/%s" %(self.filebase2DScripts, d))])) for d in tao.listdir(self.filebase2DScripts) )
-        return self.nukeScripts
-
-    def getLatestComps(self):
-        return Version("%s_%s_%s_v001" %(self.sequence.project.name, self.sequence.name, self.name) )
 
 
 class Sequence(object):
@@ -177,19 +191,24 @@ class Sequence(object):
         self.project.add_shot(name, seq=self.name )
 
     def get_shots(self):
-        return [f for f in self.ac.table[self.project.name]['Shot'] if f.get('fields') and f['fields']['sequence'] == [str(self.id)]]
+        try:
+            return [f for f in self.ac.table[self.project.name]['Shot'] if f.get('fields') and f['fields']['sequence'] == [str(self.id)]]
+        except:
+            return None
 
 class Project(object):
-    def __init__(self, facility, name):
+    def __init__(self, facility, name, id=None):
         self.type = 'Project'
         self.facility = facility
         self.ac = self.facility.ac
         self.name = name
-        self.id = None
+        self.id = id
         self.full_name = None
         self.filebase = "%s/%s" %(self.facility.filebase, self.name)
         self.id_seq = {}
         self.seq_id = {}
+
+
 
         self.episodes = {}
 
@@ -197,21 +216,11 @@ class Project(object):
         #self.get_sequences()
 
 
-        #diagnostic
-        self.isEpisodic = False
-
-    def setName(self, name):
-        self.name = name
-
-
-
 
     def get_shots(self):
         shots = self.ac.table[self.name]['Shot']
-        #
-        #return shots
-        for i in shots:
-            print i['fields']['name']
+        return [Shot(Sequence(self, self.ac._rec[self.name][s['fields']['sequence'][0]]['fields']['name'], id=s['fields']['sequence'][0]), s['fields']['name']  , id=s['id']) for s in shots]
+
 
     def get_tasks(self):
         tasks = self.ac.table[self.name]['Task']
@@ -219,8 +228,6 @@ class Project(object):
 
     def add_shot(self, name, seq=None):
         '''
-
-
         :param name: str to name the shot
         :param seq: option
         :return:
@@ -234,12 +241,36 @@ class Project(object):
                 sequence = self.add_sequence( seq )
                 seqid = sequence.id
             payload['sequence'] = [seqid]
-        return self.ac.base[self.name]['Shot'].insert( payload )
+        shot =  self.ac.base[self.name]['Shot'].insert( payload )
+        if shot:
+            if not seq:
+                return Shot(self, shot['id'])
+
+    def add_task(self, name, shot_id=None, descr=None):
+        payload = {'name': name}
+        if shot_id:
+            payload['shot'] = [shot_id]
+        if descr:
+            payload['descr'] = descr
+        return self.ac.base[self.name]['Task'].insert( payload )
+
+    def add_note(self, message, shot_id=None, task_id=None):
+
+        payload = {'message': message}
+
+        if task_id:
+            payload['task'] = [task_id]
+            if shot_id:
+                payload['shot'] = [shot_id]
+            else:
+                payload['shot'] = self.ac._rec[self.name][task_id]['fields']['shot']
+
+        return self.ac.base[self.name]['Note'].insert( payload )
+
 
     def add_sequence(self, name):
         ret =  self.ac.base[self.name]['Sequence'].insert({'name': name})
-        s = Sequence(self, name)
-        s.id = ret['id']
+        s = Sequence(self, name, ret['id'])
         return s
 
     def get_sequences(self):
@@ -256,9 +287,6 @@ class Project(object):
     def get(self, entity, fields=None, formula=None):
         pass
 
-    def getEpisodes(self, ls=False):
-        #use descriptor logic to deduce episodes, then builds an episode dict that contain sequences
-        pass
 
     def get_all_projects(self):
         return self.facility.ac.session_mapping.keys()
@@ -273,15 +301,21 @@ class Project(object):
             return rec[0]['fields']['status']
 
 
+    def shot(self, name):
+        try:
+            return [Shot(Sequence(self, self.ac._rec[self.name][s['fields']['sequence'][0]]['fields']['name'], id=s['fields']['sequence'][0]), s['fields']['name'], id=s['id']) for s in self.ac.table[self.name]['Shot'] if name==str(s['fields']['name'])][0]
+        except Exception as e:
+            print e
 
-
-
+    def sequence(self, name):
+        try:
+            return [Sequence(self,  name, id=s['id']) for s in self.ac.table[self.name]['Sequence'] if name==str(s['fields']['name'])][0]
+        except Exception as e:
+            print e
 
 
 class SGCacheWrap():
     pass
-
-
 
 
 
@@ -311,3 +345,5 @@ class Multivac(vayu.SessionManager):
     def connect_projects(self):
         for name in self.session_mapping.keys():
             self.project[name] = Project(self.facility, name)
+
+
