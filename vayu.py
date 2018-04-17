@@ -7,6 +7,9 @@ import copy
 from Queue import Queue
 from threading import Thread
 
+from PySide.QtCore import *
+from PySide.QtGui import *
+from PySide import QtCore
 
 
 '''
@@ -53,7 +56,7 @@ os.environ['AIRTABLE_API_KEY'] = API_KEY
 
 
 
-class SessionManager():
+class SessionManager(QObject):
     '''
     This will let me know easier.
     It is assumed that entities are limited to the preconfigured tables.
@@ -65,10 +68,17 @@ class SessionManager():
            For speed and unlike Shotgun, you can define custom entities at will and not have to enable them site wide.
     '''
 
+    retrieving_sessions = Signal(str)
+    this_project = Signal(str)
+    project_table_count = Signal(int)
+    table_increment = Signal(int)
+    setup_complete = Signal()
+
     def __init__(self):
         '''
         store session information in a configuration table, retrieve that information and then build a session dict which we will wrap and use to call different projects
         '''
+        super(SessionManager, self).__init__()
         self.session_mapping = None
         self.session_info = None
         self.base = {}
@@ -81,10 +91,11 @@ class SessionManager():
         for s in ['BASE', 'ENTITY']:
             self.config[s] = airtable.Airtable(CONFIG_BASE_KEY, s)
 
-
-        self.get_sessions()
+        self.c = 0
+        #self.get_sessions()
 
     def get_sessions(self, all=None):
+        self.retrieving_sessions.emit('starting to retrieve the sessssssssions')
         opt = ['active']
         if all:
             opt.append('archived')
@@ -98,10 +109,13 @@ class SessionManager():
         self._rec[base] = {}
         self.table[base] = {}
         for n in self.base[base].keys():
+            self.c += 1
+            self.table_increment.emit( self.c )
             print("Adding records into main record container for {} in {}".format( base, n ))
             self.table[base][n] = self.base[base][n].get_all()
             for r in self.table[base][n]:
                 self._rec[base][r['id']] = r
+
         return self._rec[base]
 
 
@@ -132,16 +146,19 @@ class SessionManager():
                                 except Exception:
                                     pass
 
-
-
+                    self.project_table_count.emit( len( session_entities )  )
+                    self.c = 0
                     for e in session_entities:
                         if e in self.base[k].keys():
                             print("INFO:: ALREADY FOUND:: {} >> TABLE:: {} into main session object.".format(k, e) )
 
                         else:
                             try:
+                                self.c += 1
                                 self.base[k][e] = airtable.Airtable(v, e)
                                 print("INFO:: MAPPED BASE:: {} >> TABLE:: {} into main session object.".format(k, e) )
+                                self.table_increment.emit( self.c )
+                                self.this_project.emit("%s - %s" %(k, e))
                             except:
                                 print("ERROR:: Couldnt establish base {}:{}".format(k, e) )
                     try:
@@ -150,6 +167,7 @@ class SessionManager():
                         pass
 
                     self.get_base(k)
+
         if self.team_mapping:
             self.team['People'] = airtable.Airtable(self.team_mapping, "People")
 

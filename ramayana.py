@@ -328,12 +328,12 @@ class Multivac(vayu.SessionManager):
     Inherits the facility as main object class
     '''
     def __init__(self):
-        vayu.SessionManager.__init__(self)
-        self.build_all_sessions()
-        self.facility = Facility(self)
-        self.project = {}
+        #vayu.SessionManager.__init__(self)
+        super(Multivac, self).__init__()
 
-        self.connect_projects()
+        self.get_sessions()
+
+
 
 
 
@@ -346,4 +346,11 @@ class Multivac(vayu.SessionManager):
         for name in self.session_mapping.keys():
             self.project[name] = Project(self.facility, name)
 
+    def setup(self):
+        self.build_all_sessions()
+        self.facility = Facility(self)
+        self.project = {}
 
+        self.connect_projects()
+
+        self.setup_complete.emit()
