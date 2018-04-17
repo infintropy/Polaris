@@ -98,6 +98,7 @@ class Window(QWidget):
         self.login.progress.setValue(increment)
 
 
+
     def setup_project_view(self):
         rowCount = 4
         columnCount = 6

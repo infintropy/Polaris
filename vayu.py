@@ -94,6 +94,7 @@ class SessionManager(QObject):
         self.c = 0
         #self.get_sessions()
 
+
     def get_sessions(self, all=None):
         self.retrieving_sessions.emit('starting to retrieve the sessssssssions')
         opt = ['active']

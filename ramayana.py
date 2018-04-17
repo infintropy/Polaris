@@ -321,7 +321,6 @@ class SGCacheWrap():
 
 
 
-
 class Multivac(vayu.SessionManager):
     '''
     context driver for each class instance. Can limit and communicate between the classes.
