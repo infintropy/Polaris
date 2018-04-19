@@ -65,6 +65,7 @@ class Window(QWidget):
         self.login = LoginScreen()
         #self.login.password.returnPressed
 
+
         self.projects_view = QTableView()
         self.projects_view.verticalHeader().hide()
         self.projects_view.setSelectionBehavior(QAbstractItemView.SelectRows)
